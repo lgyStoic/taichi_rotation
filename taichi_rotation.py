@@ -14,9 +14,6 @@ r_out = 205.0
 
 pixels = ti.Vector.field(3, ti.f32, shape=(res_x, res_y))
 
-
-
-
 @ ti.func
 def circle(pos, center, radius):
     r = (pos - center).norm()
@@ -41,11 +38,11 @@ def render(t:ti.f32, scale:float):
     for i,j in pixels:
         color = ti.Vector([0.0, 0.0, 0.0]) # init your canvas to white
         posScale = ti.Vector([i, j]) / scale
-        sumColor = ti.math.vec3(0.0, 0.0, 0.0)
-        for m in range(0, ti.cast(1 / scale, ti.int32)):
-            for n in range(0, ti.cast(1 / scale, ti.int32)):
+        avgColor = ti.math.vec3(0.0, 0.0, 0.0)
+        winSz = ti.cast(1 / scale, ti.int32)
+        for m in range(0, winSz):
+            for n in range(0, winSz):
                 pos = ti.math.vec2([posScale[0] + m], posScale[1] + n)
-
                 c = circle(pos, center, r_big)
                 c_up_small = circle(pos, center_up, r_small)
                 c_down_small =  circle(pos, center_down, r_small)
@@ -61,7 +58,7 @@ def render(t:ti.f32, scale:float):
                 elif c_down_big:
                     color = ti.Vector([1.0, 1.0, 1.0])
                 elif c:
-                    if pos[0] < center[0]:
+                    if pos[0] <= center[0]:
                         color = ti.Vector([0.0, 0.0, 0.0])
                     else:
                         color = ti.Vector([1.0, 1.0, 1.0])
@@ -69,26 +66,28 @@ def render(t:ti.f32, scale:float):
                     color = ti.Vector([0.0, 0.0, 0.0])
                 else:
                     color = ti.Vector([1.0, 1.0, 1.0])
-                sumColor += color
-        pixels[i, j] = sumColor / (ti.cast(1 / scale, ti.int32) ** 2)
+                avgColor += color * (1.0 / winSz ** 2) 
+        # pixels[i, j] = avgColor
         center_raw = center * scale
         r_out_raw = r_out * scale
         # rotation 
-        # if circle(ti.math.vec2(i, j), center_raw, r_out_raw) != 0:
-        #     i_ = ti.cast((i - center_raw[0]) * ti.math.cos(t) - (j - center_raw[1]) * ti.math.sin(t) + center_raw[0], ti.int32)
-        #     j_ = ti.cast((i - center_raw[0]) * ti.math.sin(t) + (j - center_raw[1]) * ti.math.cos(t) + center_raw[1], ti.int32)
-        #     pixels[i_, j_] = sumColor / (ti.cast(1 / scale, ti.int32) ** 2)
-        # else:
-        #     pixels[i, j] = ti.math.vec3(1.0, 1.0, 1.0)
+        if circle(ti.math.vec2(i, j), center_raw, r_out_raw) != 0:
+           i_ = ti.cast((i - center_raw[0]) * ti.math.cos(t) - (j - center_raw[1]) * ti.math.sin(t) + center_raw[0], ti.int32)
+           j_ = ti.cast((i - center_raw[0]) * ti.math.sin(t) + (j - center_raw[1]) * ti.math.cos(t) + center_raw[1], ti.int32)
+           pixels[i_, j_] =  avgColor
+        else:
+           pixels[i, j] = ti.math.vec3(1.0, 1.0, 1.0)
 
-
-
-gui = ti.GUI("taichi logo", res=(res_x, res_y))
-run = False
-for i in range(10000000000000):
-    t = i * 0.01
-    if not run:
-        run = True
-        render(t, 1.0/1024)
+saveImg = False 
+if saveImg:
+    file_name = "taichi.png"
+    render(0, 1.0/1024)
+    ti.tools.imwrite(pixels.to_numpy(), file_name)
+    print("saved success!")
+else:
+    gui = ti.GUI("taichi logo", res=(res_x, res_y))
+    for i in range(10000000000000):
+        t = i * 0.01
+        render(t, 1.0/32)
         gui.set_image(pixels)
         gui.show()
